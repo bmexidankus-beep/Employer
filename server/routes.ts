@@ -12,6 +12,7 @@ import {
 import { verifySubmission, generateTasks, analyzeBudget } from "./services/claude";
 import { sendPayment, getBalance, isValidWalletAddress, getEmployerAddress, getConnectionInfo, verifyTransaction } from "./services/solana";
 import { getCreatorRewards, claimCreatorRewards, checkPumpPortalHealth } from "./services/pumpportal";
+import rateLimit from 'express-rate-limit';
 
 // Maximum payment amount per transaction (in SOL)
 const MAX_PAYMENT_AMOUNT_SOL = 10;
@@ -68,6 +69,16 @@ export async function registerRoutes(
       },
     });
   });
+
+  // Limit admin API calls to 5 requests per minute per IP
+const adminLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5,
+  message: {
+    error: 'Too many admin requests, please try again later.'
+  },
+});
+
 
   // ============== Users/Workers ==============
 
@@ -783,6 +794,14 @@ export async function registerRoutes(
       res.status(500).json({ error: "Failed to analyze budget" });
     }
   });
+
+  app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/tasks') || req.path.startsWith('/submissions') || req.path.startsWith('/payments') || req.path.startsWith('/budget')) {
+    return adminLimiter(req, res, next);
+  }
+  next();
+});
+
 
   // ============== Stats - Public ==============
 
